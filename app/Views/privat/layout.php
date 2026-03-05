@@ -21,7 +21,6 @@
       <ul class="nav nav-pills flex-column">
         <li class="nav-item mb-1"><a class="nav-link" href="<?= base_url('privat/education') ?>">Estructuras</a></li>
         <li class="nav-item mb-1"><a class="nav-link" href="<?= base_url('privat/historial') ?>">Historial</a></li>
-        <li class="nav-item mb-1"><a class="nav-link" href="<?= base_url(relativePath: 'privat/validar') ?>">Validar</a></li>
         <li class="nav-item mb-1"><a class="nav-link" href="<?= base_url('privat/expedientes') ?>">Expedientes</a></li>
         <li class="nav-item mb-1"><a class="nav-link" href="<?= base_url('privat/validados') ?>">Validados</a></li>
         <li class="nav-item mb-1"><a class="nav-link" href="<?= base_url('privat/mensatges') ?>">Mensatges</a></li>

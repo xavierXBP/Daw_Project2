@@ -3,7 +3,26 @@
 <?= $this->section('content') ?>
 
 <div class="container py-4">
-    <h1 class="mb-4">Árbol de niveles, estructuras y asignaturas</h1>
+    <h1 class="mb-3">Árbol de niveles, estructuras y asignaturas</h1>
+
+    <!-- Buscador mejorado arriba -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <label for="search" class="form-label fw-semibold mb-1">
+                        Buscar estructuras / asignaturas
+                    </label>
+                    <input id="search" type="text" class="form-control"
+                           placeholder="Ej: ESO 1, Matemáticas, DAM 2...">
+                </div>
+                <div class="col-md-8">
+                    <div id="search-results" class="list-group small"></div>
+                    <div id="path-display" class="mt-2 fw-bold text-primary"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="tree">
         <?php foreach ($niveles as $n): ?>
@@ -19,12 +38,6 @@
         <?php endforeach; ?>
     </div>
 
-    <div class="mb-3">
-    <input id="search" type="text" class="form-control" placeholder="Buscar estructuras o asignaturas...">
-    <div id="search-results" class="list-group mt-1"></div>
-    <div id="path-display" class="mt-2 fw-bold"></div>
-</div>
-
 <p class="text-muted small">Abra los nodos para ver familias, cursos y asignaturas; puede tener varios abiertos a la vez.</p>
 </div>
 
@@ -35,7 +48,40 @@
     #tree .toggle-icon { transition: transform .2s ease; }
     #tree details[open] .toggle-icon { transform: rotate(90deg); }
     #tree ul { list-style: disc inside; margin: .5rem 0 1rem 1rem; }
+    #search-results .list-group-item { cursor:pointer; }
 </style>
+
+<!-- Modal para alta/edición de asignaturas -->
+<div class="modal fade" id="asigModal" tabindex="-1" aria-labelledby="asigModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="asigModalLabel">Asignatura</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label">Curso</label>
+          <input type="text" id="asigCurso" class="form-control" readonly>
+        </div>
+        <div class="mb-2">
+          <label for="asigNombre" class="form-label">Nombre de la asignatura</label>
+          <input type="text" id="asigNombre" class="form-control" placeholder="Ej: Matemáticas, Inglés...">
+        </div>
+        <div class="mb-2">
+          <label for="asigHoras" class="form-label">Horas semanales</label>
+          <input type="number" min="0" id="asigHoras" class="form-control" value="0">
+        </div>
+        <div id="asigError" class="text-danger small mt-1"></div>
+        <input type="hidden" id="asigId">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarAsignaturaDesdeModal()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 const fetchJson = url => fetch(url).then(r => r.json());
@@ -59,6 +105,9 @@ async function postJson(url, data) {
         return {};
     }
 }
+
+// Contexto global para refrescar después de guardar asignaturas
+let asigContext = null;
 
 async function loadStructs(container, query) {
     const items = await fetchJson('<?= base_url('matricula/estructuras') ?>?' + new URLSearchParams(query));
@@ -118,25 +167,8 @@ async function loadStructs(container, query) {
         btnAddChild.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (item.tipo === 'curso') {
-                const nombreAsig = prompt('Nombre de la nueva asignatura:');
-                if (!nombreAsig) return;
-                const horas = prompt('Horas semanales (opcional, número):', '0');
-                try {
-                    await postJson('<?= base_url('matricula/asignatura/save') ?>', {
-                        nombre: nombreAsig,
-                        horas_semanales: parseInt(horas || '0', 10),
-                        estructura_id: item.id
-                    });
-                    // recargar asignaturas del curso
-                    const inner = det.querySelector('.inner-children');
-                    if (inner) {
-                        inner.dataset.loaded = '';
-                        inner.innerHTML = '';
-                        await loadCursoAsignaturas(inner, item.id);
-                    }
-                } catch (err) {
-                    alert('No se ha podido crear la asignatura: ' + err.message);
-                }
+                const inner = det.querySelector('.inner-children');
+                openAsignaturaModal('new', { id: item.id, nombre: item.nombre }, null, inner);
             } else {
                 let tipoHijo = 'familia';
                 if (item.tipo === 'familia') tipoHijo = 'curso';
@@ -182,7 +214,7 @@ async function loadStructs(container, query) {
             if (det.dataset.loaded) return;
             det.dataset.loaded = '1';
             if (item.tipo === 'curso') {
-                await loadCursoAsignaturas(inner, item.id);
+                await loadCursoAsignaturas(inner, item.id, item.nombre);
             } else {
                 await loadStructs(inner, { parent: item.id });
             }
@@ -190,7 +222,7 @@ async function loadStructs(container, query) {
     });
 }
 
-async function loadCursoAsignaturas(container, estructuraId) {
+async function loadCursoAsignaturas(container, estructuraId, cursoNombre) {
     const asigs = await fetchJson('<?= base_url('matricula/asignaturas') ?>?estructura=' + estructuraId);
     container.innerHTML = '';
     if (!asigs.length) return;
@@ -209,24 +241,14 @@ async function loadCursoAsignaturas(container, estructuraId) {
         bEdit.type = 'button';
         bEdit.className = 'btn btn-outline-primary';
         bEdit.textContent = 'Editar';
-        bEdit.addEventListener('click', async (e) => {
+        bEdit.addEventListener('click', (e) => {
             e.stopPropagation();
-            const nuevo = prompt('Nuevo nombre para la asignatura:', a.nombre);
-            if (!nuevo) return;
-            const horas = prompt('Horas semanales (opcional, número):', a.horas_semanales || '0');
-            try {
-                const saved = await postJson('<?= base_url('matricula/asignatura/save') ?>', {
-                    id: a.id,
-                    nombre: nuevo,
-                    horas_semanales: parseInt(horas || '0', 10),
-                    estructura_id: estructuraId
-                });
-                a.nombre = saved.nombre;
-                a.horas_semanales = saved.horas_semanales;
-                span.textContent = saved.nombre;
-            } catch (err) {
-                alert('No se ha podido guardar la asignatura: ' + err.message);
-            }
+            openAsignaturaModal(
+                'edit',
+                { id: estructuraId, nombre: cursoNombre },
+                a,
+                container
+            );
         });
 
         const bDel = document.createElement('button');
@@ -255,9 +277,67 @@ async function loadCursoAsignaturas(container, estructuraId) {
     container.appendChild(ul);
 }
 
-// expandPath queda para uso manual si se desea, pero el buscador ya no lo invoca
-async function expandPath(path) {
-    console.log('expandPath called', path);
+// Modal de alta / edición de asignaturas
+function openAsignaturaModal(modo, curso, asig, container) {
+    const modalEl = document.getElementById('asigModal');
+    const modal = new bootstrap.Modal(modalEl);
+
+    asigContext = {
+        modo,
+        cursoId: curso.id,
+        cursoNombre: curso.nombre,
+        container
+    };
+
+    document.getElementById('asigCurso').value = curso.nombre || '';
+    document.getElementById('asigId').value = asig && asig.id ? asig.id : '';
+    document.getElementById('asigNombre').value = asig && asig.nombre ? asig.nombre : '';
+    document.getElementById('asigHoras').value = asig && asig.horas_semanales ? asig.horas_semanales : 0;
+
+    document.getElementById('asigError').textContent = '';
+
+    const title = document.getElementById('asigModalLabel');
+    title.textContent = modo === 'edit'
+        ? 'Editar asignatura de ' + (curso.nombre || '')
+        : 'Nueva asignatura para ' + (curso.nombre || '');
+
+    modal.show();
+}
+
+async function guardarAsignaturaDesdeModal() {
+    if (!asigContext) return;
+    const id = document.getElementById('asigId').value || null;
+    const nombre = document.getElementById('asigNombre').value.trim();
+    const horas = parseInt(document.getElementById('asigHoras').value || '0', 10);
+
+    const errorDiv = document.getElementById('asigError');
+    errorDiv.textContent = '';
+
+    if (!nombre) {
+        errorDiv.textContent = 'El nombre de la asignatura es obligatorio.';
+        return;
+    }
+
+    try {
+        await postJson('<?= base_url('matricula/asignatura/save') ?>', {
+            id,
+            nombre,
+            horas_semanales: horas,
+            estructura_id: asigContext.cursoId
+        });
+        if (asigContext.container) {
+            await loadCursoAsignaturas(
+                asigContext.container,
+                asigContext.cursoId,
+                asigContext.cursoNombre
+            );
+        }
+        const modalEl = document.getElementById('asigModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+    } catch (err) {
+        errorDiv.textContent = 'No se ha podido guardar la asignatura: ' + err.message;
+    }
 }
 
 function renderResults(results) {
@@ -266,19 +346,17 @@ function renderResults(results) {
     resDiv.innerHTML = '';
     display.innerHTML = '';
     results.forEach(path => {
-        // build string with breaks when names repeat consecutively
+        if (!path.length) return;
+        const last = path[path.length - 1];
         let text = '';
         for (let i = 0; i < path.length; i++) {
             if (i > 0) text += ' &gt; ';
-            if (i > 0 && path[i].nombre === path[i - 1].nombre) {
-                text += '<br>'; // line break for duplicate segment
-            }
             text += path[i].nombre;
         }
         const a = document.createElement('a');
         a.href = '#';
         a.className = 'list-group-item list-group-item-action';
-        a.innerHTML = text;
+        a.innerHTML = `<span class="fw-semibold">${last.nombre}</span><br><small class="text-muted">${text}</small>`;
         a.addEventListener('click', e => {
             e.preventDefault();
             // sólo mostrar la ruta seleccionada, no expandir nada
@@ -290,7 +368,7 @@ function renderResults(results) {
 
 document.getElementById('search').addEventListener('input', async function() {
     const q = this.value.trim();
-    if (q.length < 3) {
+    if (q.length < 2) {
         document.getElementById('search-results').innerHTML = '';
         return;
     }
