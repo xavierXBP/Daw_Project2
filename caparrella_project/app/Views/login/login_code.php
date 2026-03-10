@@ -20,11 +20,11 @@
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
     }
 
-    .left-panel {
-      background-color: #0d6efd;
-      color: white;
-      border-radius: 12px 0 0 12px;
-    }
+   .left-panel {
+  background: linear-gradient(135deg, #0a4fbf, #16c172);
+  color: white;
+  border-radius: 12px 0 0 12px;
+}
 
     .left-panel img {
       max-width: 180px;

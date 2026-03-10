@@ -14,6 +14,70 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+<style>
+    .stepper-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.stepper-wrapper::before {
+    content: "";
+    position: absolute;
+    top: 22px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #e2e8f0;
+    z-index: 0;
+}
+
+.step {
+    text-align: center;
+    position: relative;
+    z-index: 1;
+    width: 33%;
+}
+
+.step-circle {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin: 0 auto 8px auto;
+    transition: 0.3s ease;
+}
+
+.step-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #64748b;
+}
+
+.step.active .step-circle {
+    background: #0d6efd;
+}
+
+.step.active .step-label {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+.step.completed .step-circle {
+    background: #16c172;
+}
+
+.step.completed .step-label {
+    color: #16c172;
+}
+
+</style>
 <body class="bg-light">
 
 <nav class="navbar navbar-dark bg-primary">
@@ -24,6 +88,22 @@
 
 <div class="container py-5">
     <div class="card shadow-lg border-0 rounded-4">
+        <div class="stepper-wrapper mb-5">
+    <div class="step completed">
+        <div class="step-circle">1</div>
+        <div class="step-label">Datos Alumno</div>
+    </div>
+
+    <div class="step completed">
+        <div class="step-circle">2</div>
+        <div class="step-label">Datos Curso</div>
+    </div>
+
+    <div class="step active">
+        <div class="step-circle">3</div>
+        <div class="step-label">Pago</div>
+    </div>
+        </div>
         <div class="card-body p-5">
             <h4 class="mb-4 text-primary">Dades del curs </h4>
 
