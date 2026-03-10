@@ -72,6 +72,10 @@
           <label for="asigHoras" class="form-label">Horas semanales</label>
           <input type="number" min="0" id="asigHoras" class="form-control" value="0">
         </div>
+        <div class="mb-2">
+          <label for="asigPrecio" class="form-label">Precio (€)</label>
+          <input type="number" min="0" step="0.01" id="asigPrecio" class="form-control" value="0.00">
+        </div>
         <div id="asigError" class="text-danger small mt-1"></div>
         <input type="hidden" id="asigId">
       </div>
@@ -293,6 +297,7 @@ function openAsignaturaModal(modo, curso, asig, container) {
     document.getElementById('asigId').value = asig && asig.id ? asig.id : '';
     document.getElementById('asigNombre').value = asig && asig.nombre ? asig.nombre : '';
     document.getElementById('asigHoras').value = asig && asig.horas_semanales ? asig.horas_semanales : 0;
+    document.getElementById('asigPrecio').value = asig && asig.precio ? asig.precio : 0.00;
 
     document.getElementById('asigError').textContent = '';
 
@@ -309,6 +314,7 @@ async function guardarAsignaturaDesdeModal() {
     const id = document.getElementById('asigId').value || null;
     const nombre = document.getElementById('asigNombre').value.trim();
     const horas = parseInt(document.getElementById('asigHoras').value || '0', 10);
+    const precio = parseFloat(document.getElementById('asigPrecio').value || '0.00');
 
     const errorDiv = document.getElementById('asigError');
     errorDiv.textContent = '';
@@ -323,6 +329,7 @@ async function guardarAsignaturaDesdeModal() {
             id,
             nombre,
             horas_semanales: horas,
+            precio: precio,
             estructura_id: asigContext.cursoId
         });
         if (asigContext.container) {

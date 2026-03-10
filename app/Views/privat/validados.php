@@ -66,7 +66,7 @@
               <td><?= esc($alumno['curso']) ?></td>
               <td><span class="badge <?= esc($alumno['estado_clase']) ?>"><?= esc($alumno['estado_texto']) ?></span></td>
               <td class="text-center">
-                <a href="<?= base_url('privat/validar/' . $alumno['id']) ?>" class="btn btn-sm btn-success" title="Validar">V</a>              
+                <a href="<?= base_url('privat/validar/' . \App\Libraries\IdObfuscator::generateUrlSegment($alumno['id'])) ?>" class="btn btn-sm btn-success btn-validar" title="Validar">V</a>
                 <a href="#" class="btn btn-sm btn-info btn-msg" title="Editar" data-id="<?= esc($alumno['id']) ?>" data-nombre="<?= esc($alumno['nombre'] . ' ' . $alumno['apellidos']) ?>">E</a>
               </td>
             </tr>
@@ -100,7 +100,16 @@
 
       let selectedState = null;
 
-      // Filtrar por estado (botones V, E, AN)
+      // Inicializar filtros desde la URL (para mantenerlos entre vistas)
+      const urlParams = new URLSearchParams(window.location.search);
+      const initialQ = urlParams.get('q') || '';
+      const initialCurso = urlParams.get('curso') || '';
+      const initialEstado = urlParams.get('estado') || '';
+
+      if (initialQ) searchInput.value = initialQ;
+      if (initialCurso) courseFilter.value = initialCurso;
+
+      // Filtrar por estado (botones PV, V, E, AN, ALL)
       stateFilters.forEach(btn => {
         btn.addEventListener('click', function() {
           stateFilters.forEach(b => b.classList.remove('active'));
@@ -108,6 +117,11 @@
           selectedState = this.dataset.state;
           filterResults();
         });
+
+        if (initialEstado && btn.dataset.state === initialEstado) {
+          btn.classList.add('active');
+          selectedState = initialEstado;
+        }
       });
 
       // Búsqueda y filtros
@@ -131,10 +145,11 @@
           let matchSearch = nombre.includes(searchTerm) || apellido.includes(searchTerm) || dni.includes(searchTerm);
           let matchCourse = !selectedCourse || curso === selectedCourse.toLowerCase();
           let matchState = !selectedState || 
+            (selectedState === 'PV' && estado.includes('para validar')) ||
             (selectedState === 'V' && estado.includes('validado')) ||
-            (selectedState === 'ALL' && (estado.includes('validado') || estado.includes('revisión') || estado.includes('anulado'))) ||
             (selectedState === 'E' && estado.includes('revisión')) ||
-            (selectedState === 'AN' && estado.includes('anulado'));
+            (selectedState === 'AN' && estado.includes('anulado')) ||
+            (selectedState === 'ALL' && (estado.includes('validado') || estado.includes('revisión') || estado.includes('anulado') || estado.includes('para validar')));
 
           if (matchSearch && matchCourse && matchState) {
             row.style.display = '';
@@ -146,6 +161,23 @@
 
         noResults.style.display = visibleCount === 0 ? 'block' : 'none';
       }
+
+      // Al cargar, aplicar filtros iniciales si existen
+      filterResults();
+
+      // Navegar a validar manteniendo filtros
+      document.querySelectorAll('.btn-validar').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const baseHref = this.getAttribute('href');
+          const params = new URLSearchParams();
+          if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
+          if (courseFilter.value) params.set('curso', courseFilter.value);
+          if (selectedState) params.set('estado', selectedState);
+          const url = baseHref + (params.toString() ? '?' + params.toString() : '');
+          window.location.href = url;
+        });
+      });
 
       // POPUP MENSAJES (solo vista)
       const modal = new bootstrap.Modal(document.getElementById('msgModal'));
@@ -178,12 +210,14 @@
       <div class="modal-body">
         <p id="alumnoNombre" class="fw-bold"></p>
 
-        <label class="form-label">Mensajes rápidos</label>
+        <label class="form-label">Mensajes</label>
         <select id="msgPreset" class="form-select mb-3">
           <option value="">-- Selecciona un mensaje --</option>
-          <?php foreach ($missatges_rapids as $missatge): ?>
-            <option value="<?= esc($missatge) ?>"><?= esc($missatge) ?></option>
-          <?php endforeach; ?>
+          <?php if (isset($mensajes)): ?>
+            <?php foreach ($mensajes as $mensaje): ?>
+              <option value="<?= esc($mensaje['mensaje']) ?>"><?= esc($mensaje['titulo']) ?> - <?= esc($mensaje['mensaje']) ?></option>
+            <?php endforeach; ?>
+          <?php endif; ?>
         </select>
 
         <label class="form-label">Mensaje personalizado</label>

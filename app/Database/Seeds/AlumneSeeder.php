@@ -30,7 +30,8 @@ class AlumneSeeder extends Seeder
             $cursoIndex = array_rand($cursoIds);
 
             // Asignar un estado aleatorio para simular distintos casos
-            $estadosPosibles = ['En revisión', 'Validado', 'Anulado'];
+            // Prioriza algunos alumnos "Para validar" para el flujo de trabajo
+            $estadosPosibles = ['Para validar', 'En revisión', 'Validado', 'Anulado'];
             $estado = $estadosPosibles[array_rand($estadosPosibles)];
 
             $alumnos[] = [

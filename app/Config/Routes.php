@@ -32,7 +32,18 @@ $routes->get('privat/validados', 'MatriculaController::validados_view');
 $routes->post('privat/validados/(:segment)', 'MatriculaController::validados_view_2/$1');
 
 
-$routes->get('privat/validar/(:num)', 'MatriculaController::validar_view/$1');
+$routes->get('privat/validar/(:segment)', 'MatriculaController::validar_view/$1');
+$routes->post('privat/validar/(:segment)/aprobar', 'MatriculaController::aprobarAlumno/$1');
+$routes->post('privat/validar/(:segment)/anular', 'MatriculaController::anularAlumno/$1');
+
+// API endpoints
+$routes->get('api/validation-locks', 'MatriculaController::getValidationLocks');
+$routes->post('api/unlock-student/(:segment)', 'MatriculaController::unlockStudent/$1');
+
+// CRUD Mensajes
+$routes->post('api/mensajes', 'MensajeController::create');
+$routes->put('api/mensajes/(:num)', 'MensajeController::update/$1');
+$routes->delete('api/mensajes/(:num)', 'MensajeController::delete/$1');
 
 
 $routes->get('privat/historial', 'MatriculaController::historial_view');
