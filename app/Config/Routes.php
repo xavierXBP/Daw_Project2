@@ -20,7 +20,9 @@ $routes->get('privat/education','MatriculaController::education_dropdowns'); // 
 // APIs JSON
 $routes->get('matricula/estructuras','MatriculaController::estructuras');
 $routes->get('matricula/asignaturas','MatriculaController::asignaturas');
+$routes->get('matricula/asignaturas/all','MatriculaController::getAllAsignaturas');
 $routes->get('matricula/optativas','MatriculaController::optativas');
+$routes->get('matricula/optativas/all','MatriculaController::getAllOptativas');
 $routes->get('matricula/buscar','MatriculaController::buscar');
 $routes->post('matricula/estructura/save','MatriculaController::saveEstructura');
 $routes->post('matricula/estructura/delete/(:num)','MatriculaController::deleteEstructura/$1');

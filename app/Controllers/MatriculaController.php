@@ -405,6 +405,34 @@ class MatriculaController extends BaseController
    }
 
    /**
+    * API JSON para devolver todas las asignaturas.
+    */
+   public function getAllAsignaturas()
+   {
+       $db = \Config\Database::connect();
+       $asignaturas = $db->table('asignaturas')
+           ->select('id, nombre, horas_semanales, precio')
+           ->orderBy('nombre')
+           ->get()
+           ->getResult();
+       return $this->response->setJSON($asignaturas);
+   }
+
+   /**
+    * API JSON para devolver todas las optativas.
+    */
+   public function getAllOptativas()
+   {
+       $db = \Config\Database::connect();
+       $optativas = $db->table('optativas')
+           ->select('id, nombre, horas_semanales, precio')
+           ->orderBy('nombre')
+           ->get()
+           ->getResult();
+       return $this->response->setJSON($optativas);
+   }
+
+   /**
     * API JSON para devolver asignaturas de una estructura.
     */
    public function asignaturas()

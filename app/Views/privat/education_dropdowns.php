@@ -37,7 +37,11 @@
                 <div>
                     <span class="me-2 toggle-icon">▶</span><?= esc($n->nombre) ?>
                 </div>
-                <!-- Aquí podrías añadir CRUD de niveles si lo necesitas en el futuro -->
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-success" onclick="crearCursoDesdeNivel(<?= esc($n->id) ?>, '<?= esc($n->nombre) ?>')">
+                        <i class="bi bi-plus"></i> Crear Curso
+                    </button>
+                </div>
             </summary>
             <div class="card-body children py-2" data-nivel="<?= esc($n->id) ?>"></div>
         </details>
@@ -67,6 +71,56 @@
         font-weight: 500;
     }
 </style>
+
+<!-- Modal para crear curso desde nivel -->
+<div class="modal fade" id="cursoModal" tabindex="-1" aria-labelledby="cursoModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cursoModalLabel">Crear Nuevo Curso</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="cursoNombre" class="form-label">Nombre del Curso</label>
+          <input type="text" id="cursoNombre" class="form-control" placeholder="Ej: 1º ESO, DAW1, etc.">
+        </div>
+        
+        <div class="row">
+          <div class="col-md-6">
+            <label class="form-label">Asignaturas Disponibles</label>
+            <select id="asignaturasDisponibles" class="form-select" multiple size="8">
+              <!-- Se llenará dinámicamente -->
+            </select>
+            <button type="button" class="btn btn-sm btn-primary mt-2 w-100" onclick="agregarAsignatura()">Agregar Asignatura</button>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Optativas Disponibles</label>
+            <select id="optativasDisponibles" class="form-select" multiple size="8">
+              <!-- Se llenará dinámicamente -->
+            </select>
+            <button type="button" class="btn btn-sm btn-primary mt-2 w-100" onclick="agregarOptativa()">Agregar Optativa</button>
+          </div>
+        </div>
+        
+        <div class="mt-3">
+          <label class="form-label">Asignaturas y Optativas Seleccionadas</label>
+          <div id="seleccionadas" class="border rounded p-2" style="min-height: 100px; max-height: 200px; overflow-y: auto;">
+            <p class="text-muted mb-0">No hay asignaturas seleccionadas</p>
+          </div>
+        </div>
+        
+        <div id="cursoError" class="text-danger small mt-2"></div>
+        <input type="hidden" id="cursoNivelId">
+        <input type="hidden" id="cursoNivelNombre">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarCursoDesdeNivel()">Guardar Curso</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal para alta/edición de asignaturas -->
 <div class="modal fade" id="asigModal" tabindex="-1" aria-labelledby="asigModalLabel" aria-hidden="true">
@@ -183,6 +237,206 @@ async function crearNivel() {
 // Contexto global para refrescar después de guardar asignaturas
 let asigContext = null;
 let optContext = null;
+
+// Contexto para creación de cursos
+let cursoContext = {
+    nivelId: null,
+    nivelNombre: null,
+    asignaturasSeleccionadas: [],
+    optativasSeleccionadas: []
+};
+
+// Función para abrir modal de crear curso desde nivel
+async function crearCursoDesdeNivel(nivelId, nivelNombre) {
+    cursoContext.nivelId = nivelId;
+    cursoContext.nivelNombre = nivelNombre;
+    cursoContext.asignaturasSeleccionadas = [];
+    cursoContext.optativasSeleccionadas = [];
+
+    // Cargar asignaturas y optativas disponibles
+    await cargarAsignaturasYOptativas();
+
+    // Limpiar formulario
+    document.getElementById('cursoNombre').value = '';
+    document.getElementById('seleccionadas').innerHTML = '<p class="text-muted mb-0">No hay asignaturas seleccionadas</p>';
+    document.getElementById('cursoError').textContent = '';
+    document.getElementById('cursoNivelId').value = nivelId;
+    document.getElementById('cursoNivelNombre').value = nivelNombre;
+
+    // Mostrar modal
+    const modalEl = document.getElementById('cursoModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+}
+
+// Cargar asignaturas y optativas disponibles
+async function cargarAsignaturasYOptativas() {
+    try {
+        // Cargar todas las asignaturas existentes
+        const asignaturas = await fetchJson('<?= base_url('matricula/asignaturas/all') ?>');
+        const selectAsignaturas = document.getElementById('asignaturasDisponibles');
+        selectAsignaturas.innerHTML = '';
+        
+        asignaturas.forEach(asig => {
+            const option = document.createElement('option');
+            option.value = asig.id;
+            option.textContent = `${asig.nombre} (${asig.horas_semanales}h)`;
+            selectAsignaturas.appendChild(option);
+        });
+
+        // Cargar todas las optativas existentes
+        const optativas = await fetchJson('<?= base_url('matricula/optativas/all') ?>');
+        const selectOptativas = document.getElementById('optativasDisponibles');
+        selectOptativas.innerHTML = '';
+        
+        optativas.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.id;
+            option.textContent = `${opt.nombre} (€${opt.precio})`;
+            selectOptativas.appendChild(option);
+        });
+    } catch (err) {
+        console.error('Error al cargar asignaturas/optativas:', err);
+    }
+}
+
+// Agregar asignatura a la selección
+function agregarAsignatura() {
+    const select = document.getElementById('asignaturasDisponibles');
+    const selectedOption = select.options[select.selectedIndex];
+    
+    if (!selectedOption || !selectedOption.value) return;
+
+    const asignatura = {
+        id: selectedOption.value,
+        nombre: selectedOption.textContent,
+        tipo: 'asignatura'
+    };
+
+    // Verificar si ya está seleccionada
+    if (cursoContext.asignaturasSeleccionadas.find(a => a.id === asignatura.id)) {
+        return;
+    }
+
+    cursoContext.asignaturasSeleccionadas.push(asignatura);
+    actualizarSeleccionadas();
+}
+
+// Agregar optativa a la selección
+function agregarOptativa() {
+    const select = document.getElementById('optativasDisponibles');
+    const selectedOption = select.options[select.selectedIndex];
+    
+    if (!selectedOption || !selectedOption.value) return;
+
+    const optativa = {
+        id: selectedOption.value,
+        nombre: selectedOption.textContent,
+        tipo: 'optativa'
+    };
+
+    // Verificar si ya está seleccionada
+    if (cursoContext.optativasSeleccionadas.find(o => o.id === optativa.id)) {
+        return;
+    }
+
+    cursoContext.optativasSeleccionadas.push(optativa);
+    actualizarSeleccionadas();
+}
+
+// Actualizar vista de seleccionadas
+function actualizarSeleccionadas() {
+    const container = document.getElementById('seleccionadas');
+    const todas = [...cursoContext.asignaturasSeleccionadas, ...cursoContext.optativasSeleccionadas];
+    
+    if (todas.length === 0) {
+        container.innerHTML = '<p class="text-muted mb-0">No hay asignaturas seleccionadas</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+    todas.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'd-flex justify-content-between align-items-center mb-1';
+        div.innerHTML = `
+            <span class="${item.tipo === 'optativa' ? 'text-primary' : ''}">${item.nombre}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="quitarSeleccionado('${item.tipo}', '${item.id}')">Quitar</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// Quitar elemento seleccionado
+function quitarSeleccionado(tipo, id) {
+    if (tipo === 'asignatura') {
+        cursoContext.asignaturasSeleccionadas = cursoContext.asignaturasSeleccionadas.filter(a => a.id !== id);
+    } else {
+        cursoContext.optativasSeleccionadas = cursoContext.optativasSeleccionadas.filter(o => o.id !== id);
+    }
+    actualizarSeleccionadas();
+}
+
+// Guardar curso con asignaturas
+async function guardarCursoDesdeNivel() {
+    const nombre = document.getElementById('cursoNombre').value.trim();
+    const errorDiv = document.getElementById('cursoError');
+    errorDiv.textContent = '';
+
+    if (!nombre) {
+        errorDiv.textContent = 'El nombre del curso es obligatorio';
+        return;
+    }
+
+    if (cursoContext.asignaturasSeleccionadas.length === 0 && cursoContext.optativasSeleccionadas.length === 0) {
+        errorDiv.textContent = 'Debe seleccionar al menos una asignatura u optativa';
+        return;
+    }
+
+    try {
+        // Primero crear el curso
+        const curso = await postJson('<?= base_url('matricula/estructura/save') ?>', {
+            nombre: nombre,
+            tipo: 'curso',
+            nivel_id: cursoContext.nivelId,
+            parent_id: null // Se asignará después de crear la familia
+        });
+
+        // Luego asociar las asignaturas y optativas al curso
+        for (const asignatura of cursoContext.asignaturasSeleccionadas) {
+            await postJson('<?= base_url('matricula/asignatura/save') ?>', {
+                nombre: asignatura.nombre.split(' (')[0], // Quitar horas del nombre
+                horas_semanales: parseInt(asignatura.nombre.match(/\((\d+)h\)/)?.[1] || 0),
+                precio: 0,
+                estructura_id: curso.id
+            });
+        }
+
+        for (const optativa of cursoContext.optativasSeleccionadas) {
+            await postJson('<?= base_url('matricula/optativa/save') ?>', {
+                nombre: optativa.nombre.split(' (')[0], // Quitar precio del nombre
+                horas_semanales: 0,
+                precio: parseFloat(optativa.nombre.match(/\€([\d.]+)/)?.[1] || 0),
+                estructura_id: curso.id
+            });
+        }
+
+        // Cerrar modal y recargar
+        const modalEl = document.getElementById('cursoModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+
+        // Recargar la vista del nivel
+        const nivelDiv = document.querySelector(`[data-nivel="${cursoContext.nivelId}"]`);
+        if (nivelDiv) {
+            nivelDiv.dataset.loaded = '';
+            nivelDiv.innerHTML = '';
+            await loadStructs(nivelDiv, { nivel: cursoContext.nivelId });
+        }
+
+    } catch (err) {
+        errorDiv.textContent = 'Error al crear el curso: ' + err.message;
+    }
+}
 
 async function loadStructs(container, query) {
     const items = await fetchJson('<?= base_url('matricula/estructuras') ?>?' + new URLSearchParams(query));
