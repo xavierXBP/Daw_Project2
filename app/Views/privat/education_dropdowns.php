@@ -87,6 +87,38 @@
   </div>
 </div>
 
+<!-- Modal para alta/edición de optativas -->
+<div class="modal fade" id="optModal" tabindex="-1" aria-labelledby="optModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="optModalLabel">Optativa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label">Curso</label>
+          <input type="text" id="optCurso" class="form-control" readonly>
+        </div>
+        <div class="mb-2">
+          <label for="optNombre" class="form-label">Nombre de la optativa</label>
+          <input type="text" id="optNombre" class="form-control" placeholder="Ej: Informática, Música...">
+        </div>
+        <div class="mb-2">
+          <label for="optPrecio" class="form-label">Precio (€)</label>
+          <input type="number" min="0" step="0.01" id="optPrecio" class="form-control" value="0.00">
+        </div>
+        <div id="optError" class="text-danger small mt-1"></div>
+        <input type="hidden" id="optId">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarOptativaDesdeModal()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const fetchJson = url => fetch(url).then(r => r.json());
 
@@ -112,6 +144,7 @@ async function postJson(url, data) {
 
 // Contexto global para refrescar después de guardar asignaturas
 let asigContext = null;
+let optContext = null;
 
 async function loadStructs(container, query) {
     const items = await fetchJson('<?= base_url('matricula/estructuras') ?>?' + new URLSearchParams(query));
@@ -172,7 +205,13 @@ async function loadStructs(container, query) {
             e.stopPropagation();
             if (item.tipo === 'curso') {
                 const inner = det.querySelector('.inner-children');
-                openAsignaturaModal('new', { id: item.id, nombre: item.nombre }, null, inner);
+                // Mostrar menú para elegir entre asignatura u optativa
+                const choice = confirm('¿Añadir optativa? (Cancelar para asignatura normal)');
+                if (choice) {
+                    openOptativaModal('new', { id: item.id, nombre: item.nombre }, null, inner);
+                } else {
+                    openAsignaturaModal('new', { id: item.id, nombre: item.nombre }, null, inner);
+                }
             } else {
                 let tipoHijo = 'familia';
                 if (item.tipo === 'familia') tipoHijo = 'curso';
@@ -228,9 +267,14 @@ async function loadStructs(container, query) {
 
 async function loadCursoAsignaturas(container, estructuraId, cursoNombre) {
     const asigs = await fetchJson('<?= base_url('matricula/asignaturas') ?>?estructura=' + estructuraId);
+    const optativas = await fetchJson('<?= base_url('matricula/optativas') ?>?estructura=' + estructuraId);
+    
     container.innerHTML = '';
-    if (!asigs.length) return;
+    if (!asigs.length && !optativas.length) return;
+    
     const ul = document.createElement('ul');
+    
+    // Cargar asignaturas normales
     asigs.forEach(a => {
         const li = document.createElement('li');
         li.className = 'd-flex justify-content-between align-items-center';
@@ -278,7 +322,120 @@ async function loadCursoAsignaturas(container, estructuraId, cursoNombre) {
 
         ul.appendChild(li);
     });
+    
+    // Cargar optativas
+    optativas.forEach(o => {
+        const li = document.createElement('li');
+        li.className = 'd-flex justify-content-between align-items-center';
+
+        const span = document.createElement('span');
+        span.textContent = o.nombre + ' (op)';
+
+        const btns = document.createElement('div');
+        btns.className = 'btn-group btn-group-sm';
+
+        const bEdit = document.createElement('button');
+        bEdit.type = 'button';
+        bEdit.className = 'btn btn-outline-primary';
+        bEdit.textContent = 'Editar';
+        bEdit.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openOptativaModal(
+                'edit',
+                { id: estructuraId, nombre: cursoNombre },
+                o,
+                container
+            );
+        });
+
+        const bDel = document.createElement('button');
+        bDel.type = 'button';
+        bDel.className = 'btn btn-outline-danger';
+        bDel.textContent = 'Borrar';
+        bDel.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('¿Seguro que quieres borrar la optativa "' + o.nombre + '"?')) return;
+            try {
+                await postJson('<?= base_url('matricula/optativa/delete') ?>/' + o.id, {});
+                li.remove();
+            } catch (err) {
+                alert('No se ha podido borrar la optativa: ' + err.message);
+            }
+        });
+
+        btns.appendChild(bEdit);
+        btns.appendChild(bDel);
+
+        li.appendChild(span);
+        li.appendChild(btns);
+
+        ul.appendChild(li);
+    });
+    
     container.appendChild(ul);
+}
+
+// Modal de alta / edición de optativas
+function openOptativaModal(modo, curso, opt, container) {
+    const modalEl = document.getElementById('optModal');
+    const modal = new bootstrap.Modal(modalEl);
+
+    optContext = {
+        modo,
+        cursoId: curso.id,
+        cursoNombre: curso.nombre,
+        container
+    };
+
+    document.getElementById('optCurso').value = curso.nombre || '';
+    document.getElementById('optId').value = opt && opt.id ? opt.id : '';
+    document.getElementById('optNombre').value = opt && opt.nombre ? opt.nombre : '';
+    document.getElementById('optPrecio').value = opt && opt.precio ? opt.precio : 0.00;
+
+    document.getElementById('optError').textContent = '';
+
+    const title = document.getElementById('optModalLabel');
+    title.textContent = modo === 'edit'
+        ? 'Editar optativa de ' + (curso.nombre || '')
+        : 'Nueva optativa para ' + (curso.nombre || '');
+
+    modal.show();
+}
+
+async function guardarOptativaDesdeModal() {
+    if (!optContext) return;
+    const id = document.getElementById('optId').value || null;
+    const nombre = document.getElementById('optNombre').value.trim();
+    const precio = parseFloat(document.getElementById('optPrecio').value || '0.00');
+
+    const errorDiv = document.getElementById('optError');
+    errorDiv.textContent = '';
+
+    if (!nombre) {
+        errorDiv.textContent = 'El nombre de la optativa es obligatorio.';
+        return;
+    }
+
+    try {
+        await postJson('<?= base_url('matricula/optativa/save') ?>', {
+            id,
+            nombre,
+            precio: precio,
+            estructura_id: optContext.cursoId
+        });
+        if (optContext.container) {
+            await loadCursoAsignaturas(
+                optContext.container,
+                optContext.cursoId,
+                optContext.cursoNombre
+            );
+        }
+        const modalEl = document.getElementById('optModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+    } catch (err) {
+        errorDiv.textContent = 'No se ha podido guardar la optativa: ' + err.message;
+    }
 }
 
 // Modal de alta / edición de asignaturas

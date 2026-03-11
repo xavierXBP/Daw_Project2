@@ -423,6 +423,24 @@ class MatriculaController extends BaseController
    }
 
    /**
+    * API JSON para devolver optativas de una estructura.
+    */
+   public function optativas()
+   {
+       $db = \Config\Database::connect();
+       $estructura = $this->request->getGet('estructura');
+       if ($estructura === null) {
+           return $this->fail('Parámetro estructura requerido', 400);
+       }
+       $optativas = $db->table('optativas')
+           ->where('estructura_id', $estructura)
+           ->orderBy('nombre')
+           ->get()
+           ->getResult();
+       return $this->response->setJSON($optativas);
+   }
+
+   /**
     * Crea o actualiza una estructura (grado, familia, curso).
     */
    public function saveEstructura()
@@ -520,6 +538,61 @@ class MatriculaController extends BaseController
    {
        $db = \Config\Database::connect();
        $db->table('asignaturas')->where('id', $id)->delete();
+       return $this->response->setJSON(['status' => 'ok']);
+   }
+
+   /**
+    * Crea o actualiza una optativa.
+    */
+   public function saveOptativa()
+   {
+       $data = $this->request->getJSON(true) ?? $this->request->getPost();
+       if (!$data) {
+           return $this->fail('Datos no válidos', 400);
+       }
+
+       $nombre = $data['nombre'] ?? '';
+       $estructuraId = $data['estructura_id'] ?? null;
+       $precio = isset($data['precio']) ? (float)$data['precio'] : 0.00;
+
+       if (trim($nombre) === '' || !$estructuraId) {
+           return $this->fail('Nombre y estructura_id son obligatorios', 400);
+       }
+
+       if ($precio < 0) {
+           return $this->fail('El precio no puede ser negativo', 400);
+       }
+
+       $db = \Config\Database::connect();
+       $builder = $db->table('optativas');
+       $id = $data['id'] ?? null;
+
+       $record = [
+           'nombre'          => $nombre,
+           'precio'          => $precio,
+           'estructura_id'   => $estructuraId,
+           'updated_at'      => date('Y-m-d H:i:s'),
+       ];
+
+       if ($id) {
+           $builder->where('id', $id)->update($record);
+       } else {
+           $record['created_at'] = date('Y-m-d H:i:s');
+           $builder->insert($record);
+           $id = $db->insertID();
+       }
+
+       $optativa = $db->table('optativas')->where('id', $id)->get()->getRowArray();
+       return $this->response->setJSON($optativa);
+   }
+
+   /**
+    * Elimina una optativa.
+    */
+   public function deleteOptativa($id)
+   {
+       $db = \Config\Database::connect();
+       $db->table('optativas')->where('id', $id)->delete();
        return $this->response->setJSON(['status' => 'ok']);
    }
 

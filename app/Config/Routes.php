@@ -16,14 +16,18 @@ $routes->get('matricula','MatriculaController::matricula_view');// bug acces
 $routes->post('matricula','MatriculaController::matricula_post');
 
 // Endpoint para demostración de selects encadenados
-$routes->get('privat/education','MatriculaController::education_dropdowns');$routes->get('privat/education','MatriculaController::education_dropdowns'); // alias bajo layout privat// APIs JSON
+$routes->get('privat/education','MatriculaController::education_dropdowns'); // alias bajo layout privat
+// APIs JSON
 $routes->get('matricula/estructuras','MatriculaController::estructuras');
 $routes->get('matricula/asignaturas','MatriculaController::asignaturas');
+$routes->get('matricula/optativas','MatriculaController::optativas');
 $routes->get('matricula/buscar','MatriculaController::buscar');
 $routes->post('matricula/estructura/save','MatriculaController::saveEstructura');
 $routes->post('matricula/estructura/delete/(:num)','MatriculaController::deleteEstructura/$1');
 $routes->post('matricula/asignatura/save','MatriculaController::saveAsignatura');
 $routes->post('matricula/asignatura/delete/(:num)','MatriculaController::deleteAsignatura/$1');
+$routes->post('matricula/optativa/save','MatriculaController::saveOptativa');
+$routes->post('matricula/optativa/delete/(:num)','MatriculaController::deleteOptativa/$1');
 
 // Rutas bajo "privat" para layout persistente
 $routes->get('privat/expedientes', 'MatriculaController::expedientes_view');
