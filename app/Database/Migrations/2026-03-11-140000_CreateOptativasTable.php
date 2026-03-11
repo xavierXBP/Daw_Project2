@@ -10,24 +10,29 @@ class CreateOptativasTable extends Migration
     {
         $this->forge->addField([
             'id' => [
-                'type' => 'INT',
-                'constraint' => 5,
-                'unsigned' => true,
+                'type'           => 'INT',
+                'constraint'     => 11,
+                'unsigned'       => true,
                 'auto_increment' => true,
             ],
             'nombre' => [
-                'type' => 'VARCHAR',
-                'constraint' => '255',
+                'type'       => 'VARCHAR',
+                'constraint' => 150,
+            ],
+            'horas_semanales' => [
+                'type'       => 'INT',
+                'constraint' => 2,
+                'default'    => 0,
             ],
             'precio' => [
-                'type' => 'DECIMAL',
+                'type'       => 'DECIMAL',
                 'constraint' => '10,2',
-                'default' => 0.00,
+                'default'    => 0.00,
             ],
             'estructura_id' => [
-                'type' => 'INT',
-                'constraint' => 5,
-                'unsigned' => true,
+                'type'       => 'INT',
+                'constraint' => 11,
+                'unsigned'   => true,
             ],
             'created_at' => [
                 'type' => 'DATETIME',

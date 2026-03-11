@@ -3,6 +3,12 @@
 <?= $this->section('content') ?>
 
 <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">Estructura Educativa</h2>
+        <button class="btn btn-primary" onclick="crearNivel()">
+            <i class="bi bi-plus-circle"></i> Nuevo Nivel
+        </button>
+    </div>
     <h1 class="mb-3">Árbol de niveles, estructuras y asignaturas</h1>
 
     <!-- Buscador mejorado arriba -->
@@ -49,6 +55,17 @@
     #tree details[open] .toggle-icon { transform: rotate(90deg); }
     #tree ul { list-style: disc inside; margin: .5rem 0 1rem 1rem; }
     #search-results .list-group-item { cursor:pointer; }
+    
+    /* Estilo especial para optativas */
+    .optativa-item {
+        background-color: #e3f2fd !important;
+        border-left: 4px solid #2196f3;
+        padding-left: 12px !important;
+    }
+    .optativa-item span {
+        color: #1976d2;
+        font-weight: 500;
+    }
 </style>
 
 <!-- Modal para alta/edición de asignaturas -->
@@ -67,6 +84,13 @@
         <div class="mb-2">
           <label for="asigNombre" class="form-label">Nombre de la asignatura</label>
           <input type="text" id="asigNombre" class="form-control" placeholder="Ej: Matemáticas, Inglés...">
+        </div>
+        <div class="mb-2">
+          <label for="asigTipo" class="form-label">Tipo</label>
+          <select id="asigTipo" class="form-control">
+            <option value="normal">Asignatura normal</option>
+            <option value="optativa">Optativa</option>
+          </select>
         </div>
         <div class="mb-2">
           <label for="asigHoras" class="form-label">Horas semanales</label>
@@ -142,6 +166,20 @@ async function postJson(url, data) {
     }
 }
 
+async function crearNivel() {
+    const nombre = prompt('Nombre del nuevo nivel (ej: Universidad, Formación Profesional):');
+    if (!nombre) return;
+    
+    try {
+        await postJson('<?= base_url('matricula/nivel/save') ?>', {
+            nombre: nombre
+        });
+        location.reload();
+    } catch (err) {
+        alert('No se ha podido crear el nivel: ' + err.message);
+    }
+}
+
 // Contexto global para refrescar después de guardar asignaturas
 let asigContext = null;
 let optContext = null;
@@ -190,7 +228,7 @@ async function loadStructs(container, query) {
             e.stopPropagation();
             if (!confirm('¿Seguro que quieres borrar "' + item.nombre + '" y todo su contenido?')) return;
             try {
-                await postJson('<?= base_url('matricula/estructura/delete') ?>/' + item.id, {});
+                await postJson('<?= base_url('matricula/estructura/delete/') ?>' + item.id, {});
                 det.remove();
             } catch (err) {
                 alert('No se ha podido borrar: ' + err.message);
@@ -205,13 +243,7 @@ async function loadStructs(container, query) {
             e.stopPropagation();
             if (item.tipo === 'curso') {
                 const inner = det.querySelector('.inner-children');
-                // Mostrar menú para elegir entre asignatura u optativa
-                const choice = confirm('¿Añadir optativa? (Cancelar para asignatura normal)');
-                if (choice) {
-                    openOptativaModal('new', { id: item.id, nombre: item.nombre }, null, inner);
-                } else {
-                    openAsignaturaModal('new', { id: item.id, nombre: item.nombre }, null, inner);
-                }
+                openAsignaturaModal('new', { id: item.id, nombre: item.nombre }, null, inner);
             } else {
                 let tipoHijo = 'familia';
                 if (item.tipo === 'familia') tipoHijo = 'curso';
@@ -307,7 +339,7 @@ async function loadCursoAsignaturas(container, estructuraId, cursoNombre) {
             e.stopPropagation();
             if (!confirm('¿Seguro que quieres borrar la asignatura "' + a.nombre + '"?')) return;
             try {
-                await postJson('<?= base_url('matricula/asignatura/delete') ?>/' + a.id, {});
+                await postJson('<?= base_url('matricula/asignatura/delete/') ?>' + a.id, {});
                 li.remove();
             } catch (err) {
                 alert('No se ha podido borrar la asignatura: ' + err.message);
@@ -326,10 +358,11 @@ async function loadCursoAsignaturas(container, estructuraId, cursoNombre) {
     // Cargar optativas
     optativas.forEach(o => {
         const li = document.createElement('li');
-        li.className = 'd-flex justify-content-between align-items-center';
+        li.className = 'd-flex justify-content-between align-items-center optativa-item';
 
         const span = document.createElement('span');
-        span.textContent = o.nombre + ' (op)';
+        // El nombre ya incluye (op), no agregarlo de nuevo
+        span.textContent = o.nombre;
 
         const btns = document.createElement('div');
         btns.className = 'btn-group btn-group-sm';
@@ -356,7 +389,7 @@ async function loadCursoAsignaturas(container, estructuraId, cursoNombre) {
             e.stopPropagation();
             if (!confirm('¿Seguro que quieres borrar la optativa "' + o.nombre + '"?')) return;
             try {
-                await postJson('<?= base_url('matricula/optativa/delete') ?>/' + o.id, {});
+                await postJson('<?= base_url('matricula/optativa/delete/') ?>' + o.id, {});
                 li.remove();
             } catch (err) {
                 alert('No se ha podido borrar la optativa: ' + err.message);
@@ -389,7 +422,14 @@ function openOptativaModal(modo, curso, opt, container) {
 
     document.getElementById('optCurso').value = curso.nombre || '';
     document.getElementById('optId').value = opt && opt.id ? opt.id : '';
-    document.getElementById('optNombre').value = opt && opt.nombre ? opt.nombre : '';
+    
+    // Quitar (op) del nombre al mostrar en el formulario
+    let nombreOpt = opt && opt.nombre ? opt.nombre : '';
+    if (nombreOpt.endsWith(' (op)')) {
+        nombreOpt = nombreOpt.slice(0, -5);
+    }
+    document.getElementById('optNombre').value = nombreOpt;
+    
     document.getElementById('optPrecio').value = opt && opt.precio ? opt.precio : 0.00;
 
     document.getElementById('optError').textContent = '';
@@ -405,7 +445,7 @@ function openOptativaModal(modo, curso, opt, container) {
 async function guardarOptativaDesdeModal() {
     if (!optContext) return;
     const id = document.getElementById('optId').value || null;
-    const nombre = document.getElementById('optNombre').value.trim();
+    let nombre = document.getElementById('optNombre').value.trim();
     const precio = parseFloat(document.getElementById('optPrecio').value || '0.00');
 
     const errorDiv = document.getElementById('optError');
@@ -416,11 +456,17 @@ async function guardarOptativaDesdeModal() {
         return;
     }
 
+    // Agregar (op) al nombre si no lo tiene
+    if (!nombre.endsWith(' (op)')) {
+        nombre += ' (op)';
+    }
+
     try {
         await postJson('<?= base_url('matricula/optativa/save') ?>', {
             id,
             nombre,
             precio: precio,
+            horas_semanales: 0, // Las optativas no tienen horas semanales por defecto
             estructura_id: optContext.cursoId
         });
         if (optContext.container) {
@@ -469,7 +515,8 @@ function openAsignaturaModal(modo, curso, asig, container) {
 async function guardarAsignaturaDesdeModal() {
     if (!asigContext) return;
     const id = document.getElementById('asigId').value || null;
-    const nombre = document.getElementById('asigNombre').value.trim();
+    let nombre = document.getElementById('asigNombre').value.trim();
+    const tipo = document.getElementById('asigTipo').value;
     const horas = parseInt(document.getElementById('asigHoras').value || '0', 10);
     const precio = parseFloat(document.getElementById('asigPrecio').value || '0.00');
 
@@ -481,14 +528,32 @@ async function guardarAsignaturaDesdeModal() {
         return;
     }
 
+    // Agregar (op) si es optativa
+    if (tipo === 'optativa' && !nombre.endsWith(' (op)')) {
+        nombre += ' (op)';
+    }
+
     try {
-        await postJson('<?= base_url('matricula/asignatura/save') ?>', {
-            id,
-            nombre,
-            horas_semanales: horas,
-            precio: precio,
-            estructura_id: asigContext.cursoId
-        });
+        if (tipo === 'optativa') {
+            // Guardar como optativa
+            await postJson('<?= base_url('matricula/optativa/save') ?>', {
+                id,
+                nombre,
+                horas_semanales: horas,
+                precio: precio,
+                estructura_id: asigContext.cursoId
+            });
+        } else {
+            // Guardar como asignatura normal
+            await postJson('<?= base_url('matricula/asignatura/save') ?>', {
+                id,
+                nombre,
+                horas_semanales: horas,
+                precio: precio,
+                estructura_id: asigContext.cursoId
+            });
+        }
+        
         if (asigContext.container) {
             await loadCursoAsignaturas(
                 asigContext.container,

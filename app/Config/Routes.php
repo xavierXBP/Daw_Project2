@@ -28,6 +28,7 @@ $routes->post('matricula/asignatura/save','MatriculaController::saveAsignatura')
 $routes->post('matricula/asignatura/delete/(:num)','MatriculaController::deleteAsignatura/$1');
 $routes->post('matricula/optativa/save','MatriculaController::saveOptativa');
 $routes->post('matricula/optativa/delete/(:num)','MatriculaController::deleteOptativa/$1');
+$routes->post('matricula/nivel/save','MatriculaController::saveNivel');
 
 // Rutas bajo "privat" para layout persistente
 $routes->get('privat/expedientes', 'MatriculaController::expedientes_view');

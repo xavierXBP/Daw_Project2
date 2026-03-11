@@ -496,8 +496,8 @@ class MatriculaController extends BaseController
 
        $nombre = $data['nombre'] ?? '';
        $estructuraId = $data['estructura_id'] ?? null;
-       $horas = isset($data['horas_semanales']) ? (int)$data['horas_semanales'] : 0;
        $precio = isset($data['precio']) ? (float)$data['precio'] : 0.00;
+       $horas = isset($data['horas_semanales']) ? (int)$data['horas_semanales'] : 0;
 
        if (trim($nombre) === '' || !$estructuraId) {
            return $this->fail('Nombre y estructura_id son obligatorios', 400);
@@ -511,24 +511,32 @@ class MatriculaController extends BaseController
        $builder = $db->table('asignaturas');
        $id = $data['id'] ?? null;
 
-       $record = [
-           'nombre'          => $nombre,
-           'horas_semanales' => $horas,
-           'precio'          => $precio,
-           'estructura_id'   => $estructuraId,
-           'updated_at'      => date('Y-m-d H:i:s'),
-       ];
-
        if ($id) {
+           // Update existing record
+           $record = [
+               'nombre'          => $nombre,
+               'precio'          => $precio,
+               'horas_semanales' => $horas,
+               'estructura_id'   => $estructuraId,
+               'updated_at'      => date('Y-m-d H:i:s'),
+           ];
            $builder->where('id', $id)->update($record);
        } else {
-           $record['created_at'] = date('Y-m-d H:i:s');
+           // Insert new record
+           $record = [
+               'nombre'          => $nombre,
+               'precio'          => $precio,
+               'horas_semanales' => $horas,
+               'estructura_id'   => $estructuraId,
+               'created_at'      => date('Y-m-d H:i:s'),
+               'updated_at'      => date('Y-m-d H:i:s'),
+           ];
            $builder->insert($record);
            $id = $db->insertID();
        }
 
-       $asig = $db->table('asignaturas')->where('id', $id)->get()->getRowArray();
-       return $this->response->setJSON($asig);
+       $asignatura = $db->table('asignaturas')->where('id', $id)->get()->getRowArray();
+       return $this->response->setJSON($asignatura);
    }
 
    /**
@@ -554,6 +562,7 @@ class MatriculaController extends BaseController
        $nombre = $data['nombre'] ?? '';
        $estructuraId = $data['estructura_id'] ?? null;
        $precio = isset($data['precio']) ? (float)$data['precio'] : 0.00;
+       $horas = isset($data['horas_semanales']) ? (int)$data['horas_semanales'] : 0;
 
        if (trim($nombre) === '' || !$estructuraId) {
            return $this->fail('Nombre y estructura_id son obligatorios', 400);
@@ -570,6 +579,7 @@ class MatriculaController extends BaseController
        $record = [
            'nombre'          => $nombre,
            'precio'          => $precio,
+           'horas_semanales' => $horas,
            'estructura_id'   => $estructuraId,
            'updated_at'      => date('Y-m-d H:i:s'),
        ];
@@ -594,6 +604,39 @@ class MatriculaController extends BaseController
        $db = \Config\Database::connect();
        $db->table('optativas')->where('id', $id)->delete();
        return $this->response->setJSON(['status' => 'ok']);
+   }
+
+   /**
+    * Crea un nuevo nivel educativo.
+    */
+   public function saveNivel()
+   {
+       try {
+           $data = $this->request->getJSON(true) ?? $this->request->getPost();
+           if (!$data || !isset($data['nombre'])) {
+               return $this->fail('Nombre del nivel es requerido', 400);
+           }
+
+           $db = \Config\Database::connect();
+           $builder = $db->table('niveles');
+           
+           $nivelData = [
+               'nombre' => trim($data['nombre']),
+               'created_at' => date('Y-m-d H:i:s'),
+               'updated_at' => date('Y-m-d H:i:s')
+           ];
+
+           $builder->insert($nivelData);
+           
+           return $this->respondCreated([
+               'message' => 'Nivel creado correctamente',
+               'nombre' => $nivelData['nombre']
+           ]);
+           
+       } catch (\Exception $e) {
+           log_message('error', 'Error creating nivel: ' . $e->getMessage());
+           return $this->fail('Error al crear el nivel: ' . $e->getMessage(), 500);
+       }
    }
 
    /**

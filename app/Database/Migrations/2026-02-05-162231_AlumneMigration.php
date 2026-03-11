@@ -20,7 +20,15 @@ class CreateEducationSystem extends Migration
             ],
             'nombre' => [
                 'type'       => 'VARCHAR',
-                'constraint' => 50,
+                'constraint' => 120,
+            ],
+            'created_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
+            'updated_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
             ],
         ]);
         $this->forge->addKey('id', true);
@@ -86,6 +94,14 @@ class CreateEducationSystem extends Migration
                 'type'       => 'INT',
                 'constraint' => 11,
                 'unsigned'   => true,
+            ],
+            'created_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
+            'updated_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
             ],
         ]);
         $this->forge->addKey('id', true);

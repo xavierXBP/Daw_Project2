@@ -10,6 +10,12 @@ class EducationSeeder extends Seeder
     {
         $db = \Config\Database::connect();
 
+        // Limpiar tablas para evitar duplicados
+        $db->table('optativas')->emptyTable();
+        $db->table('asignaturas')->emptyTable();
+        $db->table('estructuras')->emptyTable();
+        $db->table('niveles')->emptyTable();
+
         // 1. Insertar niveles
         $niveles = [
             ['nombre' => 'ESO'],
