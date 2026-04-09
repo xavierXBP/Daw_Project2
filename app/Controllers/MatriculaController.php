@@ -313,6 +313,92 @@ class MatriculaController extends BaseController
           return $this->redirectToNextParaValidar($id, $filters, $obfuscatedId);
       }
 
+    /**
+     * Browse student folders and PDFs
+     */
+    public function expedientes_browser()
+    {
+        $expedientesPath = WRITEPATH . 'expedientes';
+        $folders = [];
+        
+        if (is_dir($expedientesPath)) {
+            $items = scandir($expedientesPath);
+            foreach ($items as $item) {
+                if ($item !== '.' && $item !== '..' && is_dir($expedientesPath . DIRECTORY_SEPARATOR . $item)) {
+                    $folderPath = $expedientesPath . DIRECTORY_SEPARATOR . $item;
+                    $pdfs = [];
+                    
+                    // Get PDF files in this folder
+                    $files = scandir($folderPath);
+                    foreach ($files as $file) {
+                        if ($file !== '.' && $file !== '..' && pathinfo($file, PATHINFO_EXTENSION) === 'pdf') {
+                            $pdfs[] = [
+                                'name' => $file,
+                                'path' => $folderPath . DIRECTORY_SEPARATOR . $file,
+                                'size' => filesize($folderPath . DIRECTORY_SEPARATOR . $file),
+                                'modified' => filemtime($folderPath . DIRECTORY_SEPARATOR . $file)
+                            ];
+                        }
+                    }
+                    
+                    // Sort PDFs by modification date (newest first)
+                    usort($pdfs, function($a, $b) {
+                        return $b['modified'] - $a['modified'];
+                    });
+                    
+                    $folders[] = [
+                        'name' => $item,
+                        'path' => $folderPath,
+                        'pdfs' => $pdfs,
+                        'created' => filemtime($folderPath),
+                        'pdf_count' => count($pdfs)
+                    ];
+                }
+            }
+            
+            // Sort folders by name
+            usort($folders, function($a, $b) {
+                return strcasecmp($a['name'], $b['name']);
+            });
+        }
+        
+        return view('privat/expedientes_browser', [
+            'folders' => $folders,
+            'total_folders' => count($folders),
+            'total_pdfs' => array_sum(array_column($folders, 'pdf_count'))
+        ]);
+    }
+
+    /**
+     * Serve PDF files from expedientes folder
+     */
+    public function serve_pdf($folder = null, $filename = null)
+    {
+        if (!$folder || !$filename) {
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('Parámetros requeridos');
+        }
+
+        // Security: validate folder name and filename
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $folder) || !preg_match('/^[a-zA-Z0-9_\-\.]+$/', $filename)) {
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('Parámetros inválidos');
+        }
+
+        $filePath = WRITEPATH . 'expedientes' . DIRECTORY_SEPARATOR . $folder . DIRECTORY_SEPARATOR . $filename;
+
+        if (!file_exists($filePath) || pathinfo($filename, PATHINFO_EXTENSION) !== 'pdf') {
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('Archivo no encontrado');
+        }
+
+        // Serve the PDF file
+        $response = $this->response;
+        $response->setHeader('Content-Type', 'application/pdf');
+        $response->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"');
+        $response->setHeader('Content-Length', filesize($filePath));
+        
+        readfile($filePath);
+        return $response;
+    }
+
       public function anularAlumno($obfuscatedId = null)
       {
           // Manejar both POST (sin ID en URL) y GET (con ID en URL)

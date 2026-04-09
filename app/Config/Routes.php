@@ -34,6 +34,8 @@ $routes->post('matricula/nivel/save','MatriculaController::saveNivel');
 
 // Rutas bajo "privat" para layout persistente
 $routes->get('privat/expedientes', 'MatriculaController::expedientes_view');
+$routes->get('privat/expedientes/browser', 'MatriculaController::expedientes_browser');
+$routes->get('privat/expedientes/pdf/(:segment)/(:segment)', 'MatriculaController::serve_pdf/$1/$2');
 $routes->get('privat/validados', 'MatriculaController::validados_view');
 $routes->post('privat/saveFilters', 'MatriculaController::saveFilters');
 
