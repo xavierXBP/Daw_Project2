@@ -302,6 +302,9 @@ class MatriculaController extends BaseController
               
               // Generate expediente and PDF
               $this->generateExpediente($id);
+              
+              // Create student folder in writable directory
+              $this->createStudentFolder($alumne);
           }
           
           // Unlock the student
@@ -393,6 +396,183 @@ class MatriculaController extends BaseController
 
         // Si no hay siguiente, volver a la lista (los filtros ya están en sesión)
         return redirect()->to(base_url('privat/validados'));
+    }
+
+    /**
+     * Create a folder for the student in the writable directory and generate PDF
+     */
+    private function createStudentFolder($alumne)
+    {
+        // Clean and format the student name and DNI for folder name
+        $nombre = trim($alumne['nombre'] ?? '');
+        $apellidos = trim($alumne['apellidos'] ?? '');
+        $dni = trim($alumne['dni'] ?? '');
+        
+        // Remove special characters and replace spaces with underscores
+        $nombreLimpio = preg_replace('/[^a-zA-Z0-9]/', '_', $nombre);
+        $apellidosLimpio = preg_replace('/[^a-zA-Z0-9]/', '_', $apellidos);
+        $dniLimpio = preg_replace('/[^a-zA-Z0-9]/', '_', $dni);
+        
+        // Create folder name: Nombre_Apellidos_DNI
+        $folderName = $nombreLimpio . '_' . $apellidosLimpio . '_' . $dniLimpio;
+        
+        // Path to writable directory
+        $writablePath = WRITEPATH . 'expedientes' . DIRECTORY_SEPARATOR . $folderName;
+        
+        // Create directory if it doesn't exist
+        if (!is_dir($writablePath)) {
+            if (mkdir($writablePath, 0755, true)) {
+                // Create an index file to prevent directory listing
+                $indexPath = $writablePath . DIRECTORY_SEPARATOR . 'index.html';
+                file_put_contents($indexPath, '<html><head><title>403 Forbidden</title></head><body><h1>Forbidden</h1></body></html>');
+                
+                // Log the folder creation
+                log_message('info', "Student folder created: {$folderName} for student ID: {$alumne['id_alumne']}");
+            } else {
+                log_message('error', "Failed to create student folder: {$folderName} for student ID: {$alumne['id_alumne']}");
+                return false;
+            }
+        } else {
+            // Log that folder already exists
+            log_message('info', "Student folder already exists: {$folderName} for student ID: {$alumne['id_alumne']}");
+        }
+        
+        // Generate PDF with student information and save to folder
+        $this->generateStudentInfoPDF($alumne, $writablePath);
+        
+        return true;
+    }
+
+    /**
+     * Generate PDF with complete student information
+     */
+    private function generateStudentInfoPDF($alumne, $folderPath)
+    {
+        try {
+            // Get additional student information
+            $estructurasModel = new EstructurasModel();
+            $curso = $estructurasModel->find($alumne['estructura_curso_id']);
+            
+            // Create filename with timestamp
+            $timestamp = date('Y-m-d_H-i-s');
+            $pdfFilename = "expediente_{$timestamp}.pdf";
+            $pdfPath = $folderPath . DIRECTORY_SEPARATOR . $pdfFilename;
+            
+            // Start HTML content for PDF
+            $html = $this->generateStudentInfoHTML($alumne, $curso);
+            
+            // Use DOMPDF to generate PDF
+            $options = new \Dompdf\Options();
+            $options->set('defaultFont', 'Arial');
+            $options->set('isRemoteEnabled', true);
+            $options->set('isHtml5ParserEnabled', true);
+            
+            $dompdf = new \Dompdf\Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            
+            // Save PDF to file
+            file_put_contents($pdfPath, $dompdf->output());
+            
+            log_message('info', "Student info PDF generated: {$pdfFilename} for student ID: {$alumne['id_alumne']}");
+            
+        } catch (\Exception $e) {
+            log_message('error', "Failed to generate PDF for student ID: {$alumne['id_alumne']} - " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate HTML content for student information PDF
+     */
+    private function generateStudentInfoHTML($alumne, $curso)
+    {
+        $html = '
+        <style>
+            .header { text-align: center; margin-bottom: 30px; }
+            .section { margin-bottom: 20px; }
+            .field { margin-bottom: 10px; }
+            .label { font-weight: bold; width: 150px; display: inline-block; }
+            .value { display: inline-block; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+        </style>
+        
+        <div class="header">
+            <h1>EXPEDIENTE DE ALUMNO</h1>
+            <h2>CURSO ACADÉMICO ' . date('Y') . ' - ' . (date('Y') + 1) . '</h2>
+            <p>Fecha de generación: ' . date('d/m/Y H:i:s') . '</p>
+        </div>
+
+        <div class="section">
+            <h3>DATOS PERSONALES</h3>
+            <div class="field">
+                <span class="label">Nombre completo:</span>
+                <span class="value">' . esc($alumne['apellidos'] . ', ' . $alumne['nombre']) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">DNI:</span>
+                <span class="value">' . esc($alumne['dni']) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Fecha de nacimiento:</span>
+                <span class="value">' . date('d/m/Y', strtotime($alumne['fecha_nacimiento'])) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Lugar de nacimiento:</span>
+                <span class="value">' . esc($alumne['lugar_nacimiento']) . '</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>DATOS DE CONTACTO</h3>
+            <div class="field">
+                <span class="label">Dirección:</span>
+                <span class="value">' . esc($alumne['direccion']) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Municipio:</span>
+                <span class="value">' . esc($alumne['municipio']) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Código Postal:</span>
+                <span class="value">' . esc($alumne['codigo_postal']) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Teléfono:</span>
+                <span class="value">' . esc($alumne['telefono_alumno']) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Email:</span>
+                <span class="value">' . esc($alumne['email_alumno']) . '</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>DATOS ACADÉMICOS</h3>
+            <div class="field">
+                <span class="label">Curso:</span>
+                <span class="value">' . esc($curso['nombre'] ?? 'No asignado') . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Estado actual:</span>
+                <span class="value">' . esc($alumne['estado']) . '</span>
+            </div>
+            <div class="field">
+                <span class="label">Fecha de validación:</span>
+                <span class="value">' . date('d/m/Y H:i:s') . '</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>OBSERVACIONES</h3>
+            <p>Expediente generado automáticamente en el proceso de validación de matrícula.</p>
+            <p>Estado de la matrícula: ' . esc($alumne['estado']) . '</p>
+            <p>ID de alumno en sistema: ' . $alumne['id_alumne'] . '</p>
+        </div>';
+
+        return $html;
     } 
      public function mensatges_view(){
           // Cargar mensajes desde la base de datos
