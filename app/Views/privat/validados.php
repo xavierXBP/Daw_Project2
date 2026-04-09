@@ -66,7 +66,10 @@
               <td><?= esc($alumno['curso']) ?></td>
               <td><span class="badge <?= esc($alumno['estado_clase']) ?>"><?= esc($alumno['estado_texto']) ?></span></td>
               <td class="text-center">
-                <a href="<?= base_url('privat/validar/' . \App\Libraries\IdObfuscator::generateUrlSegment($alumno['id'])) ?>" class="btn btn-sm btn-success btn-validar" title="Validar">V</a>
+                <form method="post" action="<?= base_url('privat/validar') ?>" style="display:inline;">
+                  <input type="hidden" name="student_id" value="<?= \App\Libraries\IdObfuscator::generateUrlSegment($alumno['id']) ?>">
+                  <button type="submit" class="btn btn-sm btn-success" title="Validar">V</button>
+                </form>
                 <a href="#" class="btn btn-sm btn-info btn-msg" title="Editar" data-id="<?= esc($alumno['id']) ?>" data-nombre="<?= esc($alumno['nombre'] . ' ' . $alumno['apellidos']) ?>">E</a>
               </td>
             </tr>
@@ -100,82 +103,110 @@
 
       let selectedState = null;
 
-      // Inicializar filtros desde la URL (para mantenerlos entre vistas)
-      const urlParams = new URLSearchParams(window.location.search);
-      const initialQ = urlParams.get('q') || '';
-      const initialCurso = urlParams.get('curso') || '';
-      const initialEstado = urlParams.get('estado') || '';
+      // Función para guardar filtros en sessionStorage
+      function saveFilters() {
+        const filters = {
+          q: searchInput.value.trim(),
+          curso: courseFilter.value,
+          estado: selectedState
+        };
+        sessionStorage.setItem('validadosFilters', JSON.stringify(filters));
+      }
 
-      if (initialQ) searchInput.value = initialQ;
-      if (initialCurso) courseFilter.value = initialCurso;
+      // Función para cargar filtros desde sessionStorage
+      function loadFilters() {
+        const saved = sessionStorage.getItem('validadosFilters');
+        if (saved) {
+          const filters = JSON.parse(saved);
+          return filters;
+        }
+        return {};
+      }
 
-      // Filtrar por estado (botones PV, V, E, AN, ALL)
+      // Inicializar filtros desde servidor y sessionStorage
+      const serverFilters = <?= json_encode($current_filters ?? []) ?>;
+      const clientFilters = loadFilters();
+      
+      // Priorizar filtros del servidor sobre los del cliente
+      const initialFilters = {
+          q: serverFilters.q || clientFilters.q || '',
+          curso: serverFilters.curso || clientFilters.curso || '',
+          estado: serverFilters.estado || clientFilters.estado || ''
+      };
+
+      if (initialFilters.q) searchInput.value = initialFilters.q;
+      if (initialFilters.curso) courseFilter.value = initialFilters.curso;
+      
+      // Sincronizar sessionStorage con filtros del servidor
+      saveFilters();
+
+      // Filtrar por estado (botones PV, V, E, AN, ALL) - ahora recarga desde servidor
       stateFilters.forEach(btn => {
         btn.addEventListener('click', function() {
           stateFilters.forEach(b => b.classList.remove('active'));
           this.classList.add('active');
           selectedState = this.dataset.state;
-          filterResults();
+          applyFiltersAndReload();
         });
 
-        if (initialEstado && btn.dataset.state === initialEstado) {
+        if (initialFilters.estado && btn.dataset.state === initialFilters.estado) {
           btn.classList.add('active');
-          selectedState = initialEstado;
+          selectedState = initialFilters.estado;
         }
       });
 
-      // Búsqueda y filtros
-      searchBtn.addEventListener('click', filterResults);
-      searchInput.addEventListener('keyup', filterResults);
-      courseFilter.addEventListener('change', filterResults);
-
-      function filterResults() {
-        const searchTerm = searchInput.value.toLowerCase();
-        const selectedCourse = courseFilter.value;
-        const rows = resultsTable.querySelectorAll('tr');
-        let visibleCount = 0;
-
-        rows.forEach(row => {
-          const nombre = row.cells[0].textContent.toLowerCase();
-          const apellido = row.cells[1].textContent.toLowerCase();
-          const dni = row.cells[2].textContent.toLowerCase();
-          const curso = row.cells[3].textContent.toLowerCase();
-          const estado = row.cells[4].textContent.toLowerCase();
-
-          let matchSearch = nombre.includes(searchTerm) || apellido.includes(searchTerm) || dni.includes(searchTerm);
-          let matchCourse = !selectedCourse || curso === selectedCourse.toLowerCase();
-          let matchState = !selectedState || 
-            (selectedState === 'PV' && estado.includes('para validar')) ||
-            (selectedState === 'V' && estado.includes('validado')) ||
-            (selectedState === 'E' && estado.includes('revisión')) ||
-            (selectedState === 'AN' && estado.includes('anulado')) ||
-            (selectedState === 'ALL' && (estado.includes('validado') || estado.includes('revisión') || estado.includes('anulado') || estado.includes('para validar')));
-
-          if (matchSearch && matchCourse && matchState) {
-            row.style.display = '';
-            visibleCount++;
-          } else {
-            row.style.display = 'none';
-          }
+      // Búsqueda y filtros - ahora recarga desde servidor
+      function applyFiltersAndReload() {
+        saveFilters();
+        
+        // Enviar filtros al servidor y recargar página
+        const filters = loadFilters();
+        fetch('<?= base_url('privat/saveFilters') ?>', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify(filters)
+        }).then(() => {
+          window.location.reload();
+        }).catch(() => {
+          // Si falla, recargar de todos modos
+          window.location.reload();
         });
-
-        noResults.style.display = visibleCount === 0 ? 'block' : 'none';
       }
 
-      // Al cargar, aplicar filtros iniciales si existen
-      filterResults();
+      searchBtn.addEventListener('click', applyFiltersAndReload);
+      courseFilter.addEventListener('change', applyFiltersAndReload);
+      
+      // Para el campo de búsqueda, esperar un poco antes de recargar
+      let searchTimeout;
+      searchInput.addEventListener('keyup', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(applyFiltersAndReload, 500);
+      });
 
-      // Navegar a validar manteniendo filtros
+      // Navegar a validar manteniendo filtros (ahora usa sessionStorage + servidor)
       document.querySelectorAll('.btn-validar').forEach(btn => {
         btn.addEventListener('click', function(e) {
           e.preventDefault();
-          const baseHref = this.getAttribute('href');
-          const params = new URLSearchParams();
-          if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
-          if (courseFilter.value) params.set('curso', courseFilter.value);
-          if (selectedState) params.set('estado', selectedState);
-          const url = baseHref + (params.toString() ? '?' + params.toString() : '');
-          window.location.href = url;
+          saveFilters(); // Guardar filtros en sessionStorage
+          
+          // Enviar filtros al servidor para guardar en sesión
+          const filters = loadFilters();
+          fetch('<?= base_url('privat/saveFilters') ?>', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(filters)
+          }).then(() => {
+            window.location.href = this.getAttribute('href');
+          }).catch(() => {
+            // Si falla, navegar de todos modos
+            window.location.href = this.getAttribute('href');
+          });
         });
       });
 

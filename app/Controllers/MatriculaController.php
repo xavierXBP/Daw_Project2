@@ -55,10 +55,41 @@ class MatriculaController extends BaseController
       $alumneModel = new AlumneModel();
       $db = \Config\Database::connect();
 
-      // Obtener alumnos con su curso
+      // Obtener filtros de la sesión
+      $sessionFilters = session()->get('validadosFilters') ?? [];
+
+      // Obtener alumnos con su curso aplicando filtros
       $builder = $db->table('alumne a')
           ->select('a.id_alumne as id, a.nombre, a.apellidos, a.dni, a.estado, e.nombre as curso')
           ->join('estructuras e', 'e.id = a.estructura_curso_id', 'left');
+
+      // Aplicar filtro de estado si existe
+      if (!empty($sessionFilters['estado']) && $sessionFilters['estado'] !== 'ALL') {
+          $estadoMap = [
+              'PV' => 'Para validar',
+              'V'  => 'Validado',
+              'E'  => 'En revisión',
+              'AN' => 'Anulado',
+          ];
+          if (isset($estadoMap[$sessionFilters['estado']])) {
+              $builder->where('a.estado', $estadoMap[$sessionFilters['estado']]);
+          }
+      }
+
+      // Aplicar filtro de curso si existe
+      if (!empty($sessionFilters['curso'])) {
+          $builder->where('e.nombre', $sessionFilters['curso']);
+      }
+
+      // Aplicar filtro de búsqueda si existe
+      if (!empty($sessionFilters['q'])) {
+          $q = $sessionFilters['q'];
+          $builder->groupStart()
+              ->like('a.nombre', $q)
+              ->orLike('a.apellidos', $q)
+              ->orLike('a.dni', $q)
+              ->groupEnd();
+      }
 
       $alumnos = $builder->get()->getResultArray();
 
@@ -113,6 +144,7 @@ class MatriculaController extends BaseController
           'filtros_estado' => $filtros_estado,
           'missatges_rapids' => $missatges_rapids,
           'mensajes' => $mensajes,
+          'current_filters' => $sessionFilters,
       ]);
       //rutas post para recivir de validar el id de alumno y el mensaje para enviar al alumno
   }
@@ -122,7 +154,40 @@ class MatriculaController extends BaseController
       return $this->validados_view();
    }
 
-      public function validar_view($obfuscatedId){
+   /**
+    * Guarda filtros en la sesión vía AJAX
+    */
+   public function saveFilters()
+   {
+       if (!$this->request->isAJAX()) {
+           return $this->response->setJSON(['status' => 'error', 'message' => 'Ajax required'], 400);
+       }
+
+       $filters = $this->request->getJSON(true);
+       if (!$filters) {
+           return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid JSON'], 400);
+       }
+
+       // Guardar filtros en sesión
+       session()->set('validadosFilters', [
+           'q' => $filters['q'] ?? '',
+           'curso' => $filters['curso'] ?? '',
+           'estado' => $filters['estado'] ?? '',
+       ]);
+
+       return $this->response->setJSON(['status' => 'success']);
+   }
+
+      public function validar_view($obfuscatedId = null){
+          // Manejar both POST (sin ID en URL) y GET (con ID en URL)
+          if ($obfuscatedId === null) {
+              // Viene de POST - obtener ID desde POST
+              $obfuscatedId = $this->request->getPost('student_id');
+              if (!$obfuscatedId) {
+                  throw new \CodeIgniter\Exceptions\PageNotFoundException('ID de alumno requerido');
+              }
+          }
+          
           try {
               $id = IdObfuscator::extractIdFromUrl($obfuscatedId);
           } catch (\Exception $e) {
@@ -131,11 +196,13 @@ class MatriculaController extends BaseController
           $alumneModel = new AlumneModel();
           $estructurasModel = new EstructurasModel();
 
-          // Filtros que llegan desde la lista de validados
+          // Filtros que llegan desde sessionStorage (pasados vía JavaScript)
+          // Intentar obtener desde sesión primero, luego desde URL como fallback
+          $sessionFilters = session()->get('validadosFilters');
           $filters = [
-              'q'      => $this->request->getGet('q'),
-              'curso'  => $this->request->getGet('curso'),
-              'estado' => $this->request->getGet('estado'),
+              'q'      => $sessionFilters['q'] ?? $this->request->getGet('q'),
+              'curso'  => $sessionFilters['curso'] ?? $this->request->getGet('curso'),
+              'estado' => $sessionFilters['estado'] ?? $this->request->getGet('estado'),
           ];
 
           // Alumno
@@ -208,8 +275,17 @@ class MatriculaController extends BaseController
           return view('privat/validar', $data);
       }
       
-      public function aprobarAlumno($obfuscatedId)
+      public function aprobarAlumno($obfuscatedId = null)
       {
+          // Manejar both POST (sin ID en URL) y GET (con ID en URL)
+          if ($obfuscatedId === null) {
+              // Viene de POST - obtener ID desde POST
+              $obfuscatedId = $this->request->getPost('student_id');
+              if (!$obfuscatedId) {
+                  throw new \CodeIgniter\Exceptions\PageNotFoundException('ID de alumno requerido');
+              }
+          }
+          
           try {
               $id = IdObfuscator::extractIdFromUrl($obfuscatedId);
           } catch (\Exception $e) {
@@ -217,11 +293,8 @@ class MatriculaController extends BaseController
           }
           
           $alumneModel = new AlumneModel();
-          $filters = [
-              'q'      => $this->request->getPost('f_q'),
-              'curso'  => $this->request->getPost('f_curso'),
-              'estado' => $this->request->getPost('f_estado'),
-          ];
+          // Los filtros ahora vienen de la sesión, no del POST
+          $filters = session()->get('validadosFilters') ?? [];
 
           $alumne = $alumneModel->find($id);
           if ($alumne) {
@@ -237,8 +310,17 @@ class MatriculaController extends BaseController
           return $this->redirectToNextParaValidar($id, $filters, $obfuscatedId);
       }
 
-      public function anularAlumno($obfuscatedId)
+      public function anularAlumno($obfuscatedId = null)
       {
+          // Manejar both POST (sin ID en URL) y GET (con ID en URL)
+          if ($obfuscatedId === null) {
+              // Viene de POST - obtener ID desde POST
+              $obfuscatedId = $this->request->getPost('student_id');
+              if (!$obfuscatedId) {
+                  throw new \CodeIgniter\Exceptions\PageNotFoundException('ID de alumno requerido');
+              }
+          }
+          
           try {
               $id = IdObfuscator::extractIdFromUrl($obfuscatedId);
           } catch (\Exception $e) {
@@ -246,11 +328,8 @@ class MatriculaController extends BaseController
           }
           
           $alumneModel = new AlumneModel();
-          $filters = [
-              'q'      => $this->request->getPost('f_q'),
-              'curso'  => $this->request->getPost('f_curso'),
-              'estado' => $this->request->getPost('f_estado'),
-          ];
+          // Los filtros ahora vienen de la sesión, no del POST
+          $filters = session()->get('validadosFilters') ?? [];
 
           $mensaje = $this->request->getPost('mensaje'); // no se usa aún para enviar email
 
@@ -266,64 +345,55 @@ class MatriculaController extends BaseController
       }
 
       private function redirectToNextParaValidar(int $currentId, array $filters, string $currentObfuscatedId = null)
-      {
-          $db = \Config\Database::connect();
-          $builder = $db->table('alumne a')
-              ->select('a.id_alumne as id, a.nombre, a.apellidos, a.dni, e.nombre as curso')
-              ->join('estructuras e', 'e.id = a.estructura_curso_id', 'left')
-              ->where('a.id_alumne >', $currentId)
-              ->orderBy('a.id_alumne', 'ASC');
+    {
+        $db = \Config\Database::connect();
+        $builder = $db->table('alumne a')
+            ->select('a.id_alumne as id, a.nombre, a.apellidos, a.dni, e.nombre as curso')
+            ->join('estructuras e', 'e.id = a.estructura_curso_id', 'left')
+            ->where('a.id_alumne >', $currentId)
+            ->orderBy('a.id_alumne', 'ASC');
 
-          // Aplicar filtro de estado solo si viene de la vista (PV, V, E, AN)
-          if (!empty($filters['estado']) && $filters['estado'] !== 'ALL') {
-              $estadoMap = [
-                  'PV' => 'Para validar',
-                  'V'  => 'Validado',
-                  'E'  => 'En revisión',
-                  'AN' => 'Anulado',
-              ];
-              if (isset($estadoMap[$filters['estado']])) {
-                  $builder->where('a.estado', $estadoMap[$filters['estado']]);
-              }
-          }
+        // Obtener filtros de la sesión (los más actualizados)
+        $sessionFilters = session()->get('validadosFilters');
+        $effectiveFilters = array_merge($filters, $sessionFilters ?? []);
 
-          if (!empty($filters['curso'])) {
-              $builder->where('e.nombre', $filters['curso']);
-          }
+        // Aplicar filtro de estado solo si viene de la vista (PV, V, E, AN)
+        if (!empty($effectiveFilters['estado']) && $effectiveFilters['estado'] !== 'ALL') {
+            $estadoMap = [
+                'PV' => 'Para validar',
+                'V'  => 'Validado',
+                'E'  => 'En revisión',
+                'AN' => 'Anulado',
+            ];
+            if (isset($estadoMap[$effectiveFilters['estado']])) {
+                $builder->where('a.estado', $estadoMap[$effectiveFilters['estado']]);
+            }
+        }
 
-          if (!empty($filters['q'])) {
-              $q = $filters['q'];
-              $builder->groupStart()
-                  ->like('a.nombre', $q)
-                  ->orLike('a.apellidos', $q)
-                  ->orLike('a.dni', $q)
-                  ->groupEnd();
-          }
+        if (!empty($effectiveFilters['curso'])) {
+            $builder->where('e.nombre', $effectiveFilters['curso']);
+        }
 
-          $next = $builder->get()->getRow();
+        if (!empty($effectiveFilters['q'])) {
+            $q = $effectiveFilters['q'];
+            $builder->groupStart()
+                ->like('a.nombre', $q)
+                ->orLike('a.apellidos', $q)
+                ->orLike('a.dni', $q)
+                ->groupEnd();
+        }
 
-          $query = http_build_query(array_filter([
-              'q'      => $filters['q'] ?? null,
-              'curso'  => $filters['curso'] ?? null,
-              'estado' => $filters['estado'] ?? null,
-          ]));
+        $next = $builder->get()->getRow();
 
-          if ($next) {
-              $nextObfuscatedId = IdObfuscator::generateUrlSegment($next->id);
-              $url = 'privat/validar/' . $nextObfuscatedId;
-              if ($query) {
-                  $url .= '?' . $query;
-              }
-              return redirect()->to(base_url($url));
-          }
+        if ($next) {
+            $nextObfuscatedId = IdObfuscator::generateUrlSegment($next->id);
+            // Ya no necesitamos pasar parámetros por URL, usamos sesión
+            return redirect()->to(base_url('privat/validar/' . $nextObfuscatedId));
+        }
 
-          // Si no hay siguiente, volver a la lista respetando filtros
-          $url = 'privat/validados';
-          if ($query) {
-              $url .= '?' . $query;
-          }
-          return redirect()->to(base_url($url));
-      }
+        // Si no hay siguiente, volver a la lista (los filtros ya están en sesión)
+        return redirect()->to(base_url('privat/validados'));
+    } 
      public function mensatges_view(){
           // Cargar mensajes desde la base de datos
           $this->mensajeModel->initializeDefaultMessages();

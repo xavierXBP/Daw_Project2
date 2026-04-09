@@ -66,10 +66,8 @@
             Estado actual: <span class="fw-semibold"><?= esc($matricula['estat']) ?></span>
           </div>
           <div class="btn-group">
-            <form method="post" action="<?= base_url('privat/validar/' . ($obfuscated_id ?? '') . '/aprobar') ?>" class="me-2">
-              <input type="hidden" name="f_q" value="<?= esc($matricula['filters']['q'] ?? '') ?>">
-              <input type="hidden" name="f_curso" value="<?= esc($matricula['filters']['curso'] ?? '') ?>">
-              <input type="hidden" name="f_estado" value="<?= esc($matricula['filters']['estado'] ?? '') ?>">
+            <form method="post" action="<?= base_url('privat/validar/aprobar') ?>" class="me-2">
+              <input type="hidden" name="student_id" value="<?= $obfuscated_id ?? '' ?>">
               <button type="submit" class="btn btn-success">
                 Validar
               </button>
@@ -95,8 +93,9 @@
         <h5 class="modal-title" id="anularModalLabel">Anular matrícula</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
-      <form method="post" action="<?= base_url('privat/validar/' . ($obfuscated_id ?? '') . '/anular') ?>">
+      <form method="post" action="<?= base_url('privat/validar/anular') ?>">
         <div class="modal-body">
+          <input type="hidden" name="student_id" value="<?= $obfuscated_id ?? '' ?>">
           <p class="fw-semibold mb-2">
             Alumno: <?= esc($matricula['alumne']['nom_complet']) ?> (<?= esc($matricula['alumne']['dni']) ?>)
           </p>
@@ -117,10 +116,6 @@
             <label class="form-label">Mensaje al alumno (se enviaría por email)</label>
             <textarea id="anularMensaje" name="mensaje" class="form-control" rows="4" placeholder="Explica el motivo de la anulación..."></textarea>
           </div>
-
-          <input type="hidden" name="f_q" value="<?= esc($matricula['filters']['q'] ?? '') ?>">
-          <input type="hidden" name="f_curso" value="<?= esc($matricula['filters']['curso'] ?? '') ?>">
-          <input type="hidden" name="f_estado" value="<?= esc($matricula['filters']['estado'] ?? '') ?>">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>

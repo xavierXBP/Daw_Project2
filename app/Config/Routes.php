@@ -35,10 +35,14 @@ $routes->post('matricula/nivel/save','MatriculaController::saveNivel');
 // Rutas bajo "privat" para layout persistente
 $routes->get('privat/expedientes', 'MatriculaController::expedientes_view');
 $routes->get('privat/validados', 'MatriculaController::validados_view');
+$routes->post('privat/saveFilters', 'MatriculaController::saveFilters');
 
 $routes->post('privat/validados/(:segment)', 'MatriculaController::validados_view_2/$1');
 
 
+$routes->post('privat/validar', 'MatriculaController::validar_view');
+$routes->post('privat/validar/aprobar', 'MatriculaController::aprobarAlumno');
+$routes->post('privat/validar/anular', 'MatriculaController::anularAlumno');
 $routes->get('privat/validar/(:segment)', 'MatriculaController::validar_view/$1');
 $routes->post('privat/validar/(:segment)/aprobar', 'MatriculaController::aprobarAlumno/$1');
 $routes->post('privat/validar/(:segment)/anular', 'MatriculaController::anularAlumno/$1');
